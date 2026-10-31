@@ -15,10 +15,10 @@ All API paths below start `/api`. JSON request/response. Auth session cookies vi
 - PUT `/settings/network` {mode:"direct"|"proxy"|"auto",proxy_url?} -> settings
 - POST `/settings/network/test` -> {id,status:"queued"}; uses durable diagnostic job, view GET /tasks/id
 - PUT `/settings/subscription` {url} -> settings (does not fetch)
-- POST `/settings/subscription/refresh` -> {id,status:"queued"}; durable job
+- POST `/settings/subscription/refresh` -> settings; downloads and parses nodes inline (40s total deadline), no task and no proxy activation. Concurrent refresh/stale config: 409; timeout: 504; failures preserve prior nodes.
 - PUT `/settings/subscription/node` {name} -> {id,status:"queued"}; test and activate
 - DELETE `/settings/credentials/{kind}` where kind = model|github|proxy|subscription -> settings
-- GET `/tasks` -> [{id,kind:"analysis"|"diagnostic"|"subscription"|"node",prompt,status,repository,created_at,updated_at,error}]
+- GET `/tasks` -> [{id,kind:"analysis"|"diagnostic"|"node",prompt,status,repository,created_at,updated_at,error}]
 - POST `/tasks` {prompt,request_id} -> {id,status}; snapshot settings and target repo, reject unconfigured
 - GET `/tasks/{id}` -> task fields plus {result:{report:string,evidence:[{title,url}],limitations:[string]}|null,events:[{id,kind,message,created_at}],drafts:[Draft]}
 - GET `/tasks/{id}/events?after=0` -> SSE event progress data {id,kind,message,created_at}. UI can poll detail every 3s as fallback.
@@ -46,3 +46,5 @@ Task status queued/running/waiting_confirmation/waiting_network/waiting_rate_lim
 - `async activate_mihomo(nodes,selected,controller_url,controller_secret,config_path,proxy_url)->dict`: deploy-side configured internal controller only; atomic candidate config, load + select + GitHub read-only test, rollback on failure. If no sidecar configured raise clear error. Discuss signature changes with root.
 
 Tests import `from app...` using PYTHONPATH=backend. Shared .venv is being installed by root. Do not modify other owners' files.
+
+Legacy subscription refresh task records are retained internally but excluded from task APIs and cancelled by the worker if unfinished. Refreshing nodes does not change the active proxy; node activation remains a separate action.

@@ -6,6 +6,7 @@ import ipaddress
 import json
 import os
 import re
+import ssl
 import tempfile
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -170,7 +171,7 @@ async def download_subscription(url: str, proxy_url: str | None = None, transpor
         async with httpx.AsyncClient(proxy=proxy_url, transport=transport, timeout=httpx.Timeout(30, connect=5), follow_redirects=False, trust_env=False) as client:
             async with client.stream('GET', url, headers=headers, extensions=extensions) as response:
                 if response.status_code != 200:
-                    raise IntegrationError('Subscription download failed.')
+                    raise IntegrationError(f'订阅下载失败：HTTP {response.status_code}；请检查订阅地址、有效期或服务商访问限制。')
                 chunks = []
                 size = 0
                 async for chunk in response.aiter_bytes():
@@ -179,8 +180,25 @@ async def download_subscription(url: str, proxy_url: str | None = None, transpor
                         raise IntegrationError('Subscription is too large.', kind='validation')
                     chunks.append(chunk)
         return parse_subscription(b''.join(chunks).decode('utf-8'))
-    except (httpx.HTTPError, UnicodeError):
-        raise IntegrationError('Subscription download failed.', kind='network') from None
+    except httpx.ConnectTimeout:
+        raise IntegrationError('订阅下载连接超时：服务器尚未取得订阅内容，请检查订阅服务地址或出站网络。', kind='network') from None
+    except httpx.ReadTimeout:
+        raise IntegrationError('订阅内容读取超时：请稍后重试或检查订阅服务状态。', kind='network') from None
+    except (httpx.ConnectError, ssl.SSLError) as exc:
+        cause = exc
+        tls_failure = False
+        while cause is not None:
+            if isinstance(cause, ssl.SSLError):
+                tls_failure = True
+                break
+            cause = cause.__cause__
+        message = ('订阅 HTTPS 握手或证书验证失败：请使用证书有效的订阅地址。' if tls_failure
+                   else '无法连接订阅服务：请检查地址、端口、HTTPS 服务及服务器出站网络。')
+        raise IntegrationError(message, kind='network') from None
+    except UnicodeError:
+        raise IntegrationError('订阅内容不是有效的 UTF-8 文本，无法解析。', kind='validation') from None
+    except httpx.HTTPError:
+        raise IntegrationError('订阅传输失败：尚未完成下载，请检查网络后重试。', kind='network') from None
 
 
 def render_mihomo_config(nodes, selected, controller_secret) -> str:
@@ -288,7 +306,7 @@ async def _restore(previous, target, controller_url, controller_secret, transpor
 
 async def _deploy(config, controller_url, controller_secret, config_path, proxy_url, transport, probe_transport, before_commit, probe):
     if not controller_url:
-        raise IntegrationError('Mihomo sidecar is not configured.', kind='configuration')
+        raise IntegrationError('服务器尚未配置 Mihomo 代理组件，无法启用或清理代理。', kind='configuration')
     if probe and not proxy_url:
         raise IntegrationError('Mihomo proxy is not configured.', kind='configuration')
     parsed = urlsplit(controller_url)

@@ -82,3 +82,13 @@ test('node activation uses versioned contract route and PUT method', async () =>
   await api.selectNode('节点一');
   assert.equal(method, 'PUT');
 });
+
+test('subscription refresh returns settings directly instead of a task', async () => {
+  const settings = { subscription: { nodes: [{ name: 'one', type: 'trojan' }] } };
+  const api = new ApiClient(async (url, init) => {
+    assert.equal(url, '/api/settings/subscription/refresh');
+    assert.equal(init?.method, 'POST');
+    return new Response(JSON.stringify(settings));
+  });
+  assert.deepEqual(await api.refreshSubscription(), settings);
+});

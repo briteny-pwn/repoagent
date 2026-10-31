@@ -56,6 +56,7 @@ def create_app(config=None):
     store = Store(config)
     app = FastAPI(title='Repository Steward', docs_url=None, redoc_url=None)
     app.state.store, app.state.config = store, config
+    subscription_refresh_lock = asyncio.Lock()
     salt = secrets.token_bytes(16)
     expected_password = password_hash(config.admin_password, salt)
 
@@ -214,6 +215,8 @@ def create_app(config=None):
         url = check_https(str(body.get('url', '')), allow_query=True)
         with store.connect() as c:
             cfg = store.settings(c)
+            if cfg['subscription']['url'] != url:
+                cfg['generations']['subscription'] += 1
             cfg['subscription'].update(url=url, status='已保存，等待导入')
             store.save_settings(cfg, c)
             store.audit('subscription_settings', 'subscription', c)
@@ -248,10 +251,29 @@ def create_app(config=None):
         return queued('diagnostic')
 
     @app.post('/api/settings/subscription/refresh')
-    def subscription_refresh(s=Depends(auth)):
-        if not store.settings()['subscription']['url']:
-            raise HTTPException(400, '请先保存订阅')
-        return queued('subscription')
+    async def subscription_refresh(s=Depends(auth)):
+        from .subscriptions import download_subscription
+        if subscription_refresh_lock.locked():
+            raise HTTPException(409, '订阅正在刷新，请等待完成')
+        async with subscription_refresh_lock:
+            snapshot = store.settings()
+            url = snapshot['subscription']['url']
+            if not url:
+                raise HTTPException(400, '请先保存订阅')
+            try:
+                nodes = await asyncio.wait_for(
+                    download_subscription(url, proxy_url=proxy_for(snapshot, config)), timeout=40)
+            except asyncio.TimeoutError:
+                raise HTTPException(504, '订阅刷新超时，原有节点已保留，请稍后重试') from None
+            with store.connect() as c:
+                current = store.settings(c)
+                if (current['subscription']['url'] != url or
+                        current['generations']['subscription'] != snapshot['generations']['subscription']):
+                    raise HTTPException(409, '订阅已变更，本次刷新结果未保存，请重新刷新')
+                current['subscription'].update(nodes=nodes, updated_at=now(), status=f'已刷新 {len(nodes)} 个节点；刷新不会切换当前代理')
+                store.save_settings(current, c)
+                store.audit('subscription_refreshed', 'subscription', c)
+            return public_settings(store)
 
     @app.put('/api/settings/subscription/node')
     def select_node(body: dict, s=Depends(auth)):
@@ -270,11 +292,11 @@ def create_app(config=None):
 
     @app.get('/api/tasks')
     def tasks(s=Depends(auth)):
-        return [public_task(t) for t in store.all('tasks')]
+        return [public_task(t) for t in store.all('tasks') if t['kind'] != 'subscription']
 
     def require_task(ident, c=None):
         task = store.get('tasks', ident, c)
-        if task is None:
+        if task is None or task.get('kind') == 'subscription':
             raise HTTPException(404, '任务不存在')
         return task
 
