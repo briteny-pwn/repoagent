@@ -81,7 +81,7 @@ API、Worker 与 Mihomo 共享 API 的容器网络命名空间；代理仅监听
    - 订阅：粘贴私密订阅链接，保存并更新。成功验证节点后自动使用内部代理；不直接把订阅 URL 填成代理地址。
    - 网络：检查当前代理与 GitHub 连接状态，然后创建首个分析任务。
 
-订阅目前支持 Clash YAML 节点列表和纯文本/base64 URI 列表中的 SS、Trojan、VMess（TCP/WebSocket）。不支持的协议会明确报错；不保证用户提供的订阅属于支持格式。HTTPS 证书错误不会被忽略。订阅失败保留旧配置，首次下载需要服务器直连或一个已有可用代理。
+订阅支持 Clash YAML 的普通 SOCKS5（可选用户名/密码、UDP）、SS、Trojan、VMess 节点，以及纯文本/base64 URI 列表中的 SS、Trojan、VMess（TCP/WebSocket）。SOCKS5 over TLS 与 SOCKS5 URI 暂不支持。不支持的协议会明确报错；不保证用户提供的订阅属于支持格式。HTTPS 证书错误不会被忽略。订阅失败保留旧配置，首次下载需要服务器直连或一个已有可用代理。
 
 ## 数据与恢复
 

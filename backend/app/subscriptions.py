@@ -19,6 +19,7 @@ from .integrations import IntegrationError, validate_public_url, pin_public_url
 _LIMIT = 2 * 1024 * 1024
 _CIPHERS = {'aes-128-gcm', 'aes-192-gcm', 'aes-256-gcm', 'chacha20-ietf-poly1305', 'xchacha20-ietf-poly1305'}
 _ALLOWED = {
+    'socks5': {'username', 'password', 'udp', 'tls'},
     'trojan': {'password', 'sni', 'udp'},
     'ss': {'cipher', 'password', 'udp'},
     'vmess': {'uuid', 'alterId', 'cipher', 'tls', 'servername', 'network', 'ws-opts', 'udp'},
@@ -37,7 +38,7 @@ def _server(value):
         raise IntegrationError('Invalid node server.', kind='validation')
     host = value.strip('[]').lower().rstrip('.')
     if host == 'localhost' or host.endswith('.localhost'):
-        raise IntegrationError('Private node server is not allowed.', kind='validation')
+        raise IntegrationError('订阅包含回环或非公网地址，不能作为公网代理节点导入；请检查订阅服务返回的节点。', kind='validation')
     try:
         address = ipaddress.ip_address(host)
     except ValueError:
@@ -45,7 +46,7 @@ def _server(value):
             raise IntegrationError('Invalid node server.', kind='validation') from None
     else:
         if not address.is_global:
-            raise IntegrationError('Private node server is not allowed.', kind='validation')
+            raise IntegrationError('订阅包含回环或非公网地址，不能作为公网代理节点导入；请检查订阅服务返回的节点。', kind='validation')
     return value
 
 
@@ -65,6 +66,17 @@ def _normalize(raw):
     for key in _ALLOWED[kind]:
         if key in raw:
             node[key] = raw[key]
+    if kind == 'socks5':
+        if 'tls' in node and node['tls'] is not False:
+            raise IntegrationError('SOCKS5 over TLS 暂不支持，请使用普通 SOCKS5 节点。', kind='validation')
+        if 'udp' in node and type(node['udp']) is not bool:
+            raise IntegrationError('Invalid SOCKS5 UDP option.', kind='validation')
+        if 'username' in node or 'password' in node:
+            for field in ('username', 'password'):
+                value = node.get(field)
+                if not isinstance(value, str) or not 1 <= len(value.encode('utf-8')) <= 255:
+                    raise IntegrationError('SOCKS5 用户名和密码须同时提供，长度为 1–255 字节。', kind='validation')
+        return node
     required = {'trojan': 'password', 'ss': 'password', 'vmess': 'uuid'}[kind]
     if not isinstance(node.get(required), str) or not node[required]:
         raise IntegrationError('Subscription node lacks credentials.', kind='validation')
