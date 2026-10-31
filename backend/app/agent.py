@@ -22,7 +22,7 @@ SYSTEM = '''你是 GitHub 公开仓库辅助管理助理。只读分析仓库，
 用户要求改代码时说明边界，并可建议 Issue。缺少 Issue 编号时询问，不猜测评论目标。
 最终返回一个 JSON 对象，不加代码围栏：
 {"report":"中文 Markdown 报告", "evidence":[{"title":"来源标题","url":"工具返回链接"}], "limitations":["数据限制"], "drafts":[{"kind":"issue或comment","title":"Issue标题","body":"正文","issue_number":评论目标编号或null}]}
-无须发布则 drafts 为 []。最多生成三个草稿。Issue 创建建议前调用 search_issues 查重。
+报告与草稿保持简洁，避免重复叙述，优先保证完整输出 JSON。无须发布则 drafts 为 []。最多生成三个草稿。Issue 创建建议前调用 search_issues 查重。
 '''
 
 
@@ -41,13 +41,39 @@ def source_links(value, repo):
     return found
 
 
+def recover_report_field(text):
+    """Decode only complete top-level fields; never repair or recover drafts."""
+    decoder = json.JSONDecoder()
+    remaining = text.lstrip()
+    if not remaining.startswith('{'): return None
+    remaining = remaining[1:].lstrip()
+    try:
+        for _ in range(20):
+            key, end = decoder.raw_decode(remaining)
+            remaining = remaining[end:].lstrip()
+            if not isinstance(key, str) or not remaining.startswith(':'): return None
+            remaining = remaining[1:].lstrip()
+            value, end = decoder.raw_decode(remaining)
+            if key == 'report': return value if isinstance(value, str) else None
+            remaining = remaining[end:].lstrip()
+            if not remaining.startswith(','): return None
+            remaining = remaining[1:].lstrip()
+    except (ValueError, TypeError):
+        return None
+    return None
+
+
 def parse_result(content, allowed_links, tools_used):
-    text = content or ''
+    text = (content or '').strip()
     if text.startswith('```'):
         text = text.split('\n', 1)[-1].rsplit('```', 1)[0]
     try:
         result = json.loads(text)
     except (ValueError, TypeError):
+        if text.lstrip().startswith('{'):
+            recovered = recover_report_field(text)
+            return {'report': (recovered or '模型输出不完整，无法提取完整报告，请缩小指令范围后重试。')[:30000],
+                    'evidence': [], 'limitations': ['模型结构化输出不完整或格式无效；仅展示可完整解析的报告正文，未生成任何可发布草稿。']}, []
         return {'report': str(content or '模型没有返回报告。')[:30000], 'evidence': [], 'limitations': ['模型未返回结构化结果；未生成任何可发布草稿。']}, []
     if not isinstance(result, dict) or not isinstance(result.get('report'), str):
         raise IntegrationError('模型报告结构无效')

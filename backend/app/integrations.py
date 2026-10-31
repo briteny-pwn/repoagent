@@ -325,7 +325,7 @@ class ModelClient:
         headers, extensions = None, None
         if not self._injected:
             url, headers, extensions = await pin_public_url(url)
-        payload = {'model': self.model, 'messages': messages, 'max_tokens': 4096}
+        payload = {'model': self.model, 'messages': messages, 'max_tokens': 8192}
         if tools:
             payload['tools'] = tools
         try:

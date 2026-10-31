@@ -31,7 +31,16 @@ class DraftInput(BaseModel):
 
 
 def public_task(task):
-    return {k: v for k, v in task.items() if k not in ('snapshot', 'payload', 'checkpoint', 'lease', 'owner')}
+    value = {k: v for k, v in task.items() if k not in ('snapshot', 'payload', 'checkpoint', 'lease', 'owner')}
+    result = value.get('result')
+    if result and '模型未返回结构化结果；未生成任何可发布草稿。' in result.get('limitations', []):
+        from .agent import parse_result
+        raw = result.get('report', '').strip()
+        if raw.startswith('{'):
+            # Read-time compatibility for old fallback reports; never create drafts.
+            normalized, _ = parse_result(raw, set(), set())
+            value['result'] = normalized
+    return value
 
 
 def public_settings(store):

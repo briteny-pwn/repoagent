@@ -134,7 +134,7 @@ async def test_model_completion_uses_openai_shape_and_hides_remote_body():
         assert await client.complete([{'role':'user','content':'hello'}]) == {'role':'assistant','content':'ok'}
     assert captured[0].url.path == '/v1/chat/completions'
     assert json.loads(captured[0].content)['model'] == 'm'
-    assert json.loads(captured[0].content)['max_tokens'] == 4096
+    assert json.loads(captured[0].content)['max_tokens'] == 8192
 
 
 @pytest.mark.asyncio
