@@ -235,6 +235,10 @@ class GitHubClient:
             query = str(args.get('query', ''))[:200]
             if not query:
                 raise IntegrationError('Search query is required.', kind='validation')
+            # GitHub requires an explicit record type for this authenticated search.
+            query = re.sub(r'(?<!\S)is:pr(?=\s|$)', 'is:pull-request', query, flags=re.I)
+            if not re.search(r'(?<!\S)is:(?:issue|pull-request)(?=\s|$)', query, re.I):
+                query = 'is:issue ' + query
             data = await self._request('GET', '/search/issues', params={'q': f'repo:{repo} {query}', 'per_page': 50})
             if not isinstance(data, dict):
                 raise IntegrationError('GitHub returned invalid search data.')
