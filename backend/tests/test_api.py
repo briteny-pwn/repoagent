@@ -133,3 +133,100 @@ def test_successful_login_does_not_exhaust_failure_budget(tmp_path):
     c,_=make_client(tmp_path)
     for _ in range(12):
         assert c.post('/api/auth/login',json={'password':'correct-horse-long-pass'}).status_code==200
+
+
+@pytest.mark.parametrize('selected', [None, 'one'])
+def test_subscription_refresh_updates_settings_without_creating_task(tmp_path, monkeypatch, selected):
+    import app.subscriptions as subs
+    c, app = make_client(tmp_path); login(c)
+    c.put('/api/settings/subscription', json={'url':'https://example.com/sub'})
+    before=app.state.store.settings()
+    before['subscription']['selected_node']=selected
+    app.state.store.save_settings(before)
+    async def download(*args, **kwargs):
+        return [{'name':'one','type':'trojan','password':'private-node-secret','server':'example.com','port':443}]
+    monkeypatch.setattr(subs,'download_subscription',download)
+    r=c.post('/api/settings/subscription/refresh')
+    assert r.status_code==200
+    assert r.json()['subscription']['nodes']==[{'name':'one','type':'trojan'}]
+    assert 'private-node-secret' not in r.text
+    assert app.state.store.all('tasks')==[]
+    assert app.state.store.settings()['network']==before['network']
+    assert app.state.store.settings()['subscription']['selected_node'] == selected
+
+
+def test_subscription_refresh_failure_keeps_existing_settings(tmp_path, monkeypatch):
+    import app.subscriptions as subs
+    from app.integrations import IntegrationError
+    c, app = make_client(tmp_path); login(c)
+    cfg=app.state.store.settings();cfg['subscription'].update(url='https://example.com/sub',nodes=[{'name':'old','type':'trojan'}]);app.state.store.save_settings(cfg)
+    async def download(*args, **kwargs): raise IntegrationError('订阅连接超时',kind='network')
+    monkeypatch.setattr(subs,'download_subscription',download)
+    r=c.post('/api/settings/subscription/refresh')
+    assert r.status_code==400
+    assert r.json()['detail']=='订阅连接超时'
+    assert app.state.store.settings()==cfg
+    assert app.state.store.all('tasks')==[]
+
+
+@pytest.mark.parametrize('change', ['revoke','replace'])
+def test_subscription_refresh_rejects_stale_download(tmp_path, monkeypatch, change):
+    import app.subscriptions as subs
+    c, app = make_client(tmp_path); login(c)
+    c.put('/api/settings/subscription',json={'url':'https://example.com/sub'})
+    async def download(*args, **kwargs):
+        cfg=app.state.store.settings()
+        if change=='revoke':
+            cfg['subscription']['url']='';cfg['generations']['subscription']+=1
+        else: cfg['subscription']['url']='https://example.com/other'
+        app.state.store.save_settings(cfg)
+        return [{'name':'stale','type':'trojan'}]
+    monkeypatch.setattr(subs,'download_subscription',download)
+    assert c.post('/api/settings/subscription/refresh').status_code==409
+    assert app.state.store.settings()['subscription']['nodes']==[]
+    assert app.state.store.all('tasks')==[]
+
+
+def test_task_list_excludes_legacy_subscription_refresh(tmp_path):
+    c, app=make_client(tmp_path);login(c)
+    legacy=app.state.store.enqueue('subscription')
+    analysis=app.state.store.enqueue('analysis','analyze')
+    assert [t['id'] for t in c.get('/api/tasks').json()]==[analysis['id']]
+    assert app.state.store.get('tasks',legacy['id']) is not None
+
+
+@pytest.mark.asyncio
+async def test_subscription_refresh_rejects_overlapping_requests(tmp_path, monkeypatch):
+    import asyncio
+    import httpx
+    import app.subscriptions as subs
+    c, app=make_client(tmp_path);login(c)
+    c.put('/api/settings/subscription',json={'url':'https://example.com/sub'})
+    started, release=asyncio.Event(),asyncio.Event()
+    async def download(*args, **kwargs):
+        started.set();await release.wait()
+        return [{'name':'one','type':'trojan'}]
+    monkeypatch.setattr(subs,'download_subscription',download)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://testserver',cookies=c.cookies,headers={'X-CSRF-Token':c.headers['X-CSRF-Token']}) as client:
+        first=asyncio.create_task(client.post('/api/settings/subscription/refresh'))
+        await asyncio.wait_for(started.wait(),2)
+        try:
+            assert (await client.post('/api/settings/subscription/refresh')).status_code==409
+        finally: release.set()
+        assert (await first).status_code==200
+    assert app.state.store.all('tasks')==[]
+
+
+def test_subscription_refresh_total_timeout_keeps_old_data(tmp_path, monkeypatch):
+    import asyncio
+    import app.main as main
+    c, app=make_client(tmp_path);login(c)
+    c.put('/api/settings/subscription',json={'url':'https://example.com/sub'})
+    before=app.state.store.settings()
+    async def timeout(awaitable, timeout):
+        awaitable.close()
+        raise asyncio.TimeoutError()
+    monkeypatch.setattr(main.asyncio,'wait_for',timeout)
+    assert c.post('/api/settings/subscription/refresh').status_code==504
+    assert app.state.store.settings()==before
+    assert app.state.store.all('tasks')==[]
