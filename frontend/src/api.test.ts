@@ -92,3 +92,19 @@ test('subscription refresh returns settings directly instead of a task', async (
   });
   assert.deepEqual(await api.refreshSubscription(), settings);
 });
+
+test('project routes scope commands and encode project identifiers', async () => {
+  const calls: Array<{ url: string; init: RequestInit }> = [];
+  const api = new ApiClient(async (url, init) => { calls.push({ url: String(url), init: init ?? {} }); return new Response('{}'); });
+  api.csrfToken = 'token';
+  await api.projects();
+  await api.createProject('https://github.com/org/repo');
+  await api.project('project/1');
+  await api.initializeProject('project/1');
+  await api.projectTasks('project/1');
+  await api.createProjectTask('project/1', '总结', 'request-1');
+  assert.deepEqual(calls.map(call => call.url), ['/api/projects', '/api/projects', '/api/projects/project%2F1', '/api/projects/project%2F1/initialize', '/api/projects/project%2F1/tasks', '/api/projects/project%2F1/tasks']);
+  assert.deepEqual(JSON.parse(String(calls[1].init.body)), { repository_url: 'https://github.com/org/repo' });
+  assert.deepEqual(JSON.parse(String(calls[5].init.body)), { prompt: '总结', request_id: 'request-1' });
+  assert.equal(new Headers(calls[5].init.headers).get('X-CSRF-Token'), 'token');
+});

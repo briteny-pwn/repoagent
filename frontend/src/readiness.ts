@@ -12,3 +12,10 @@ export function missingAnalysisSettings(settings: AnalysisSettings): string[] {
   if (!settings.github.repository?.trim()) missing.push('GitHub 目标仓库');
   return missing;
 }
+
+export function missingModelSettings(settings: Pick<Settings, 'model'>): string[] {
+  const missing: string[] = [];
+  if (!settings.model.model.trim()) missing.push('模型名称');
+  if (!settings.model.api_key_configured) missing.push('模型 API Key');
+  return missing;
+}

@@ -167,6 +167,17 @@ class GitHubClient:
             raise IntegrationError('Repository is not public.', kind='private')
         return data
 
+    async def directory(self, repo: str) -> list[dict]:
+        """Return at most 1000 root entries, after rechecking public access."""
+        repo = _repo(repo)
+        await self.repository(repo)
+        data = await self._request('GET', f'/repos/{repo}/contents')
+        if not isinstance(data, list):
+            raise IntegrationError('GitHub returned invalid directory data.')
+        fields = ('name', 'path', 'type', 'html_url', 'size', 'sha')
+        return [{key: item.get(key) for key in fields} for item in data[:1000]
+                if isinstance(item, dict)]
+
     async def _list(self, path, params):
         items = []
         pages = 0

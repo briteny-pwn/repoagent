@@ -1,10 +1,14 @@
 export type TaskStatus = 'queued' | 'running' | 'waiting_confirmation' | 'waiting_network' | 'waiting_rate_limit' | 'completed' | 'failed' | 'cancelled';
 export type DraftStatus = 'draft' | 'pending' | 'executing' | 'succeeded' | 'failed' | 'unknown' | 'discarded';
-export type TaskKind = 'analysis' | 'diagnostic' | 'subscription' | 'node';
+export type TaskKind = 'initialization' | 'analysis' | 'diagnostic' | 'subscription' | 'node';
 export interface Event { id: string; kind: string; message: string; created_at: string }
 export interface Draft { id: string; task_id: string; kind: 'issue' | 'comment'; repository: string; issue_number: number | null; title: string; body: string; version: number; status: DraftStatus; external_url: string | null; error: string | null }
-export interface Task { id: string; kind: TaskKind; prompt: string; status: TaskStatus; repository: string | null; created_at: string; updated_at: string; error: string | null }
+export interface Task { project_id: string | null; id: string; kind: TaskKind; prompt: string; status: TaskStatus; repository: string | null; created_at: string; updated_at: string; error: string | null }
 export interface TaskDetail extends Task { result: { report: string; evidence: { title: string; url: string }[]; limitations: string[] } | null; events: Event[]; drafts: Draft[] }
+export interface Report { report: string; evidence: { title: string; url: string }[]; limitations: string[] }
+export interface Snapshot { metadata: Record<string, unknown>; readme: Record<string, unknown> | null; files: Record<string, unknown>[]; directory: Record<string, unknown>[]; issues: { items: Record<string, unknown>[]; coverage: Record<string, unknown> }; pull_requests: { items: Record<string, unknown>[]; coverage: Record<string, unknown> }; captured_at: string; limitations: string[] }
+export interface Project { id: string; repository: string; name: string; status: 'pending' | 'initializing' | 'ready' | 'failed'; initialization_task_id: string | null; initialized_at: string | null; created_at: string; updated_at: string; last_error: string | null }
+export interface ProjectDetail extends Project { summary: Report | null; snapshot: Snapshot | null }
 export interface Settings {
   model: { base_url: string; model: string; api_key_configured: boolean; max_steps: number };
   github: { token_configured: boolean; repository_url: string; repository: string | null };
@@ -71,6 +75,12 @@ export class ApiClient {
   refreshSubscription() { return this.request<Settings>('/settings/subscription/refresh', 'POST'); }
   selectNode(name: string) { return this.request<{ id: string; status: 'queued' }>('/settings/subscription/node', 'PUT', { name }); }
   deleteCredential(kind: 'model' | 'github' | 'proxy' | 'subscription') { return this.request<Settings>(`/settings/credentials/${kind}`, 'DELETE'); }
+  projects() { return this.request<Project[]>('/projects'); }
+  createProject(repository_url: string) { return this.request<ProjectDetail>('/projects', 'POST', { repository_url }); }
+  project(id: string) { return this.request<ProjectDetail>(`/projects/${encodeURIComponent(id)}`); }
+  initializeProject(id: string) { return this.request<{ id: string; status: TaskStatus }>(`/projects/${encodeURIComponent(id)}/initialize`, 'POST'); }
+  projectTasks(id: string) { return this.request<Task[]>(`/projects/${encodeURIComponent(id)}/tasks`); }
+  createProjectTask(id: string, prompt: string, request_id: string) { return this.request<{ id: string; status: TaskStatus }>(`/projects/${encodeURIComponent(id)}/tasks`, 'POST', { prompt, request_id }); }
   tasks() { return this.request<Task[]>('/tasks'); }
   createTask(prompt: string, request_id: string) { return this.request<{ id: string; status: TaskStatus }>('/tasks', 'POST', { prompt, request_id }); }
   task(id: string) { return this.request<TaskDetail>(`/tasks/${encodeURIComponent(id)}`); }

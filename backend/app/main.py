@@ -50,6 +50,14 @@ def public_settings(store):
     }
 
 
+def public_project(store, project, detail=False):
+    value = {k:v for k,v in project.items() if k != 'context'}
+    if detail:
+        saved = store.unseal(project['context']) if project.get('context') else {}
+        value.update(summary=saved.get('summary'), snapshot=saved.get('snapshot'))
+    return value
+
+
 def create_app(config=None):
     config = config or Config()
     config.validate()
@@ -282,6 +290,68 @@ def create_app(config=None):
             raise HTTPException(400, '节点不存在')
         return queued('node', {'name': body['name']})
 
+    def require_project(ident, c=None):
+        project = store.get('projects', ident, c)
+        if not project:
+            raise HTTPException(404, '项目不存在')
+        return project
+
+    def require_model(cfg):
+        if not cfg['model']['api_key'] or not cfg['model']['model'] or not cfg['model']['base_url']:
+            raise HTTPException(400, '请先在设置中配置模型地址、名称和 API Key')
+
+    @app.get('/api/projects')
+    def projects(s=Depends(auth)):
+        return [public_project(store, p) for p in store.all('projects')]
+
+    @app.post('/api/projects')
+    async def import_project(body: dict, s=Depends(auth)):
+        repo = parse_repository(str(body.get('repository_url', '')))
+        existing = next((p for p in store.all('projects') if p['repository'].lower() == repo.lower()), None)
+        if existing:
+            return public_project(store, existing, True)
+        cfg = store.settings()
+        require_model(cfg)
+        async with GitHubClient(cfg['github']['token'], proxy_for(cfg, config)) as client:
+            metadata = await client.repository(repo)
+        canonical = parse_repository('https://github.com/' + metadata.get('full_name', repo))
+        with store.connect() as c:
+            project, created = store.create_project(canonical, c)
+            if created:
+                store.initialize_project(project['id'], c)
+                store.audit('project_imported', canonical, c)
+            project = store.get('projects', project['id'], c)
+        return public_project(store, project, True)
+
+    @app.get('/api/projects/{ident}')
+    def project_detail(ident: str, s=Depends(auth)):
+        return public_project(store, require_project(ident), True)
+
+    @app.post('/api/projects/{ident}/initialize')
+    def initialize_project(ident: str, s=Depends(auth)):
+        with store.connect() as c:
+            require_project(ident, c)
+            require_model(store.settings(c))
+            task = store.initialize_project(ident, c)
+        return {'id':task['id'], 'status':task['status']}
+
+    @app.get('/api/projects/{ident}/tasks')
+    def project_tasks(ident: str, s=Depends(auth)):
+        require_project(ident)
+        return [public_task(t) for t in store.all('tasks') if t.get('project_id') == ident and t['kind'] in ('analysis','initialization')]
+
+    @app.post('/api/projects/{ident}/tasks')
+    def project_command(ident: str, body: TaskInput, s=Depends(auth)):
+        if not body.prompt.strip():
+            raise HTTPException(400, '请输入项目指令')
+        with store.connect() as c:
+            project = require_project(ident, c)
+            if project['status'] != 'ready':
+                raise HTTPException(409, '请先完成项目初始化；失败时可在项目概览重试')
+            require_model(store.settings(c))
+            task = store.enqueue('analysis', body.prompt.strip(), body.request_id, project_id=ident, conn=c)
+        return {'id':task['id'], 'status':task['status']}
+
     @app.post('/api/tasks')
     def create_task(body: TaskInput, s=Depends(auth)):
         cfg = store.settings()
@@ -326,8 +396,11 @@ def create_app(config=None):
     def cancel_task(ident: str, s=Depends(auth)):
         with store.connect() as c:
             task = require_task(ident, c)
+            if task['status'] in ('completed', 'failed', 'cancelled'):
+                return {'ok': True}
             task.update(status='cancelled', updated_at=now())
             store.put('tasks', ident, task, c)
+            store.sync_project_task(task, c)
             for d in store.all('drafts', c):
                 if d['task_id'] == ident and d['status'] in ('draft', 'pending'):
                     d['status'] = 'discarded'
@@ -347,6 +420,7 @@ def create_app(config=None):
             snapshot['generations']['proxy'] = cfg['generations']['proxy']
             task.update(snapshot=store.seal(snapshot), status='queued', error=None, deadline=time.time()+3600, updated_at=now())
             store.put('tasks', ident, task, c)
+            store.sync_project_task(task, c)
             store.event(ident, 'queued', '采用当前网络配置恢复任务', c)
         return {'ok': True}
 

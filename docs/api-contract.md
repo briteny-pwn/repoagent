@@ -18,7 +18,7 @@ All API paths below start `/api`. JSON request/response. Auth session cookies vi
 - POST `/settings/subscription/refresh` -> settings; downloads and parses nodes inline (40s total deadline), no task and no proxy activation. Concurrent refresh/stale config: 409; timeout: 504; failures preserve prior nodes.
 - PUT `/settings/subscription/node` {name} -> {id,status:"queued"}; test and activate
 - DELETE `/settings/credentials/{kind}` where kind = model|github|proxy|subscription -> settings
-- GET `/tasks` -> [{id,kind:"analysis"|"diagnostic"|"node",prompt,status,repository,created_at,updated_at,error}]
+- GET `/tasks` -> [{id,kind:"analysis"|"initialization"|"diagnostic"|"node",prompt,status,repository,created_at,updated_at,error}]
 - POST `/tasks` {prompt,request_id} -> {id,status}; snapshot settings and target repo, reject unconfigured
 - GET `/tasks/{id}` -> task fields plus {result:{report:string,evidence:[{title,url}],limitations:[string]}|null,events:[{id,kind,message,created_at}],drafts:[Draft]}
 - GET `/tasks/{id}/events?after=0` -> SSE event progress data {id,kind,message,created_at}. UI can poll detail every 3s as fallback.
@@ -30,6 +30,20 @@ All API paths below start `/api`. JSON request/response. Auth session cookies vi
 - POST `/drafts/{id}/discard` {version} -> Draft
 
 Task status queued/running/waiting_confirmation/waiting_network/waiting_rate_limit/completed/failed/cancelled. Draft status draft/pending/executing/succeeded/failed/unknown/discarded. Render text/markdown safely (no raw HTML). Link only https GitHub evidence. Unknown publication must not expose retry button.
+
+## Project API
+
+- GET `/projects` -> Project[]
+- POST `/projects` {repository_url} -> ProjectDetail; validates public GitHub repository and model settings, creates project and initialization job atomically. Case-insensitive duplicate returns existing project.
+- GET `/projects/{id}` -> ProjectDetail
+- POST `/projects/{id}/initialize` -> {id,status}; queued/running initialization is reused. Failed initialization can be retried; prior successful data is preserved until replacement succeeds.
+- GET `/projects/{id}/tasks` -> Task[] scoped to project.
+- POST `/projects/{id}/tasks` {prompt,request_id} -> {id,status}; requires ready project, freezes repository and bounded context. Request IDs are scoped per project.
+
+Project = {id,repository,name,status:pending|initializing|ready|failed,initialization_task_id,initialized_at,created_at,updated_at,last_error}.
+ProjectDetail adds {summary:Report|null,snapshot:Snapshot|null}. Snapshot contains metadata, root directory, readme, files, issues:{items,coverage}, pull_requests:{items,coverage}, captured_at, limitations. File content uses `text`. Task adds nullable `project_id`.
+
+Snapshots are encrypted at rest and returned only to authenticated users; internal task snapshots and credentials are never returned. Initialization creates no publication drafts. Failed refresh retains previous snapshot; commands require successful initialization. Historical analysis tasks migrate into projects by repository without external requests. Legacy POST /tasks is retained for compatibility; the UI uses project endpoints.
 
 ## Adapter Python API (owned by adapter agent)
 `backend/app/integrations.py` standalone (no store dependencies), async methods:

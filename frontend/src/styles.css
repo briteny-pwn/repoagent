@@ -5,3 +5,32 @@
 @media(max-width:560px){.main-content{padding:27px 16px 50px}.overview-grid{grid-template-columns:1fr 1fr;gap:10px}.overview-card{padding:16px;min-height:140px}.overview-card:first-child{grid-column:1/-1;min-height:120px}.welcome-row h1{font-size:23px}.welcome-decoration{display:none}.composer-card{padding:18px}.composer-footer{align-items:flex-end;gap:10px}.composer-footer>span{max-width:170px;line-height:1.5}.recent-item,.task-row{gap:9px;padding:13px}.recent-item>.status,.task-row>.status{display:none}.history-toolbar{display:block}.search-box{margin-top:14px}.search-box input{flex:1}.detail-title-row h2{font-size:19px}.detail-subline{flex-wrap:wrap;gap:7px}.result-section,.drafts-section,.events-section,.settings-card{padding:19px}.draft-head{flex-wrap:wrap}.draft-state{margin-left:44px}.settings-actions{align-items:stretch}.settings-actions .push-right{margin-left:0}.login-box{padding:30px}.topbar-right .server-state{font-size:0}.server-state span{font-size:initial}}
 
 .config-dialog{width:min(440px,calc(100% - 32px));border:1px solid #dce8e2;border-radius:16px;padding:28px;color:#25483c;box-shadow:0 24px 80px #12372c33}.config-dialog::backdrop{background:#18382c77}.config-dialog h2{font-size:20px;margin:0 0 12px}.config-dialog p,.config-dialog li{font-size:14px;line-height:1.8}.config-dialog ul{padding-left:22px;margin:16px 0 24px}.config-dialog-actions{display:flex;justify-content:flex-end;gap:10px}.new-task-button:disabled{opacity:.65;cursor:wait}
+
+/* Project workspaces */
+.project-workspace { max-width: 1400px; margin: 0 auto; }
+.project-import { padding: 22px; border: 1px solid var(--border, #e4e7e5); border-radius: 16px; background: white; margin-bottom: 24px; }
+.project-import label { display: block; margin-bottom: 10px; font-weight: 600; }
+.project-import > div { display: flex; gap: 12px; }
+.project-import input { flex: 1; min-width: 0; }
+.project-layout { display: grid; grid-template-columns: 235px minmax(0, 1fr); gap: 24px; align-items: start; }
+.project-navigation { padding: 16px; border: 1px solid #e4e7e5; border-radius: 14px; background: #fff; }
+.project-navigation h2 { margin: 0 0 15px; font-size: 15px; }
+.project-navigation > button { display: flex; width: 100%; gap: 10px; text-align: left; padding: 12px 10px; border: 0; border-radius: 9px; background: transparent; cursor: pointer; }
+.project-navigation > button.selected { background: #eaf4ee; color: #24684c; }
+.project-navigation button span { min-width: 0; }
+.project-navigation strong { display: block; overflow-wrap: anywhere; font-size: 13px; }
+.project-navigation small { display: block; margin-top: 6px; color: #718078; }
+.project-content { min-width: 0; background: white; border: 1px solid #e4e7e5; border-radius: 16px; padding: 26px; }
+.project-header { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+.project-header h2 { margin: 8px 0; overflow-wrap: anywhere; }
+.project-tabs { display: flex; flex-wrap: wrap; gap: 5px; border-bottom: 1px solid #e4e7e5; margin: 22px 0; padding-bottom: 10px; }
+.project-tabs button { border: 0; background: none; padding: 10px 12px; cursor: pointer; border-radius: 8px; color: #627268; }
+.project-tabs button.selected { background: #eaf4ee; color: #24684c; font-weight: 600; }
+.snapshot-items { display: grid; gap: 10px; margin-bottom: 24px; }
+.snapshot-items article { padding: 14px; border: 1px solid #e9eeeb; border-radius: 9px; overflow-wrap: anywhere; }
+.snapshot-items a { color: #2f7156; }
+.snapshot-excerpt { color: #6d7872; font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
+.project-content .task-row { width: 100%; text-align: left; }
+@media (max-width: 1000px) { .project-layout { grid-template-columns: 1fr; } .project-navigation { display: flex; flex-wrap: wrap; gap: 5px; } .project-navigation h2 { width: 100%; } .project-navigation > button { width: auto; } }
+@media (max-width: 600px) { .project-import > div, .project-header { flex-direction: column; align-items: stretch; } .project-content { padding: 16px; } .project-tabs button { padding: 9px; } }
+.snapshot-source { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; max-height: 420px; overflow: auto; }
