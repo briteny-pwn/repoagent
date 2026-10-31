@@ -298,7 +298,7 @@ class ModelClient:
         self.base_url = str(base_url).rstrip('/')
         self.model = model
         self._injected = transport is not None
-        self._client = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(60, connect=5, read=180), follow_redirects=False, trust_env=False,
+        self._client = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(60, connect=5, read=300), follow_redirects=False, trust_env=False,
                                          headers={'Authorization': f'Bearer {api_key}', 'Content-Type':'application/json'})
 
     async def __aenter__(self):
@@ -321,7 +321,7 @@ class ModelClient:
         try:
             response = await self._client.post(url, json=payload, headers=headers, extensions=extensions)
         except httpx.ReadTimeout:
-            raise IntegrationError('模型响应超时：等待生成结果超过180秒，可稍后继续任务或选择响应更快的模型。', kind='network') from None
+            raise IntegrationError('模型响应超时：等待生成结果超过300秒，可稍后继续任务或选择响应更快的模型。', kind='network') from None
         except httpx.ConnectTimeout:
             raise IntegrationError('连接模型服务超时，请检查模型接口地址与服务器网络。', kind='network') from None
         except (httpx.TimeoutException, httpx.NetworkError, httpx.ProxyError):
