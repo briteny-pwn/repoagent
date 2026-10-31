@@ -95,3 +95,9 @@
  .directory-details .snapshot-items { grid-template-columns: 1fr; }
  .analysis-basis summary span { display: block; margin: 8px 0 0; }
 }
+
+.snapshot-markdown { margin-top: 16px; padding-top: 6px; border-top: 1px solid #edf1ee; }
+.snapshot-markdown .markdown { font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
+.snapshot-markdown .markdown h2 { font-size: 19px; margin-top: 22px; }
+.snapshot-markdown .markdown h3 { font-size: 16px; }
+.snapshot-markdown .markdown pre { overflow-x: auto; max-width: 100%; }
