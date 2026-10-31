@@ -147,7 +147,14 @@ class GitHubClient:
                 continue
             if response.status_code >= 300:
                 kind = 'not_found' if response.status_code == 404 else 'auth' if response.status_code in (401, 403) else 'remote'
-                raise IntegrationError('GitHub request failed.', kind=kind, ambiguous=method != 'GET' and response.status_code >= 500)
+                status = response.status_code
+                reasons = {401: '认证失败，请检查 GitHub 访问令牌',
+                           403: '请求被拒绝，请检查访问权限或 GitHub 访问限制',
+                           404: '资源不存在或不可访问，请检查仓库、文件路径或分支',
+                           422: '请求参数无效，请检查工具参数'}
+                reason = reasons.get(status, '发生重定向，请检查仓库地址' if 300 <= status < 400 else
+                                     'GitHub 服务暂时异常，请稍后重试' if status >= 500 else 'GitHub 拒绝了请求')
+                raise IntegrationError(f'{reason}（HTTP {status}）', kind=kind, ambiguous=method != 'GET' and status >= 500)
             try:
                 return response.json()
             except ValueError:
