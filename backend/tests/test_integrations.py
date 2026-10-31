@@ -510,3 +510,46 @@ async def test_rollback_detects_stale_running_proxy_state(tmp_path):
         await activate_mihomo(nodes,'a','http://mihomo:9090','secret',path,'http://mihomo:7890',
                               transport=httpx.MockTransport(controller),probe_transport=httpx.MockTransport(lambda _:httpx.Response(503)))
     assert error.value.kind=='rollback'
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('failure, expected', [
+    (httpx.ConnectTimeout('https://feed.example/?token=secret'), '连接超时'),
+    (httpx.ReadTimeout('token=secret'), '读取超时'),
+    (httpx.ConnectError('token=secret'), '无法连接'),
+])
+async def test_subscription_download_errors_identify_stage_without_secrets(failure, expected):
+    def handler(request):
+        raise failure
+    with pytest.raises(IntegrationError) as caught:
+        await download_subscription('https://feed.example/?token=secret', transport=httpx.MockTransport(handler))
+    assert expected in str(caught.value)
+    assert caught.value.kind == 'network'
+    assert 'secret' not in str(caught.value)
+
+@pytest.mark.asyncio
+async def test_subscription_download_reports_http_status_without_response_body():
+    transport = httpx.MockTransport(lambda _: httpx.Response(403, text='private subscription credential'))
+    with pytest.raises(IntegrationError) as caught:
+        await download_subscription('https://feed.example/sub', transport=transport)
+    assert 'HTTP 403' in str(caught.value)
+    assert 'private' not in str(caught.value)
+
+@pytest.mark.asyncio
+async def test_subscription_tls_error_is_safe_and_specific():
+    import ssl
+    def handler(request):
+        try:
+            raise ssl.SSLCertVerificationError('token=secret')
+        except ssl.SSLError as cause:
+            raise httpx.ConnectError('token=secret') from cause
+    with pytest.raises(IntegrationError) as caught:
+        await download_subscription('https://feed.example/sub', transport=httpx.MockTransport(handler))
+    assert 'HTTPS' in str(caught.value)
+    assert 'secret' not in str(caught.value)
+
+@pytest.mark.asyncio
+async def test_subscription_invalid_encoding_is_validation_error():
+    with pytest.raises(IntegrationError) as caught:
+        await download_subscription('https://feed.example/sub', transport=httpx.MockTransport(lambda _: httpx.Response(200, content=b'\xff')))
+    assert caught.value.kind == 'validation'
+    assert 'UTF-8' in str(caught.value)
