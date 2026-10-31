@@ -189,3 +189,42 @@ def test_worker_cancels_legacy_subscription_jobs_without_executing(tmp_path):
     worker=Worker(cfg,store)
     assert worker.claim() is None
     assert store.get('tasks',legacy['id'])['status']=='cancelled'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('error_kind', ['unsupported', 'not_found'])
+async def test_unreadable_file_is_returned_to_model_without_failing_task(tmp_path, error_kind):
+    from app.worker import Worker
+    class GitHub(FakeGitHub):
+        async def tool(self,repo,name,args):
+            raise IntegrationError('Unreadable file.',kind=error_kind)
+    class Model(FakeModel):
+        count=0
+        async def complete(self,messages,tools=None):
+            type(self).count+=1
+            if self.count==1:
+                return {'role':'assistant','content':None,'tool_calls':[{'id':'read','type':'function','function':{'name':'read_file','arguments':'{"path":"image.png"}'}}]}
+            assert json.loads(messages[-1]['content'])['error']['kind']==error_kind
+            return {'role':'assistant','content':json.dumps({'report':'根据已有资料分析，图片未读取','evidence':[],'limitations':['图片未读取'],'drafts':[]})}
+    cfg,s=setup(tmp_path);t=s.enqueue('analysis','read')
+    await Worker(cfg,s,github_factory=GitHub,model_factory=Model).tick()
+    assert s.get('tasks',t['id'])['status']=='completed'
+
+@pytest.mark.asyncio
+async def test_file_recovery_does_not_hide_repository_access_loss(tmp_path):
+    from app.worker import Worker
+    class GitHub(FakeGitHub):
+        calls=0
+        async def repository(self,repo):
+            self.calls+=1
+            if self.calls>1: raise IntegrationError('Repository is not public.',kind='private')
+            return await super().repository(repo)
+        async def tool(self,repo,name,args):
+            raise IntegrationError('Missing file.',kind='not_found')
+    class Model(FakeModel):
+        async def complete(self,messages,tools=None):
+            return {'role':'assistant','content':None,'tool_calls':[{'id':'read','type':'function','function':{'name':'read_file','arguments':'{"path":"missing.md"}'}}]}
+    cfg,s=setup(tmp_path);t=s.enqueue('analysis','read')
+    await Worker(cfg,s,github_factory=GitHub,model_factory=Model).tick()
+    assert s.get('tasks',t['id'])['status']=='failed'
+    assert s.get('tasks',t['id'])['error']=='Repository is not public.'
