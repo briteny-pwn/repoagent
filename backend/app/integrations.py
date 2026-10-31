@@ -141,7 +141,8 @@ class GitHubClient:
                 raise IntegrationError('GitHub connection failed.', kind='network', ambiguous=method != 'GET') from None
             rate = _rate_limit(response)
             if rate:
-                raise rate
+                hint = '请等待配额恢复。' if self._token else '当前未配置 GitHub 访问令牌，匿名配额由出口 IP 共享；可在设置中配置令牌后重新初始化。'
+                raise IntegrationError('GitHub API 请求已达限额。'+hint, kind='rate_limit', retry_at=rate.retry_at)
             if method == 'GET' and response.status_code in (500, 502, 503, 504) and attempt + 1 < attempts:
                 await asyncio.sleep(min(2 ** attempt + random.random(), 3))
                 continue
@@ -166,6 +167,17 @@ class GitHubClient:
         if not isinstance(data, dict) or data.get('private') is not False:
             raise IntegrationError('Repository is not public.', kind='private')
         return data
+
+    async def directory(self, repo: str) -> list[dict]:
+        """Return at most 1000 root entries, after rechecking public access."""
+        repo = _repo(repo)
+        await self.repository(repo)
+        data = await self._request('GET', f'/repos/{repo}/contents')
+        if not isinstance(data, list):
+            raise IntegrationError('GitHub returned invalid directory data.')
+        fields = ('name', 'path', 'type', 'html_url', 'size', 'sha')
+        return [{key: item.get(key) for key in fields} for item in data[:1000]
+                if isinstance(item, dict)]
 
     async def _list(self, path, params):
         items = []
@@ -286,7 +298,7 @@ class ModelClient:
         self.base_url = str(base_url).rstrip('/')
         self.model = model
         self._injected = transport is not None
-        self._client = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(60, connect=5), follow_redirects=False, trust_env=False,
+        self._client = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(60, connect=5, read=300), follow_redirects=False, trust_env=False,
                                          headers={'Authorization': f'Bearer {api_key}', 'Content-Type':'application/json'})
 
     async def __aenter__(self):
@@ -308,8 +320,12 @@ class ModelClient:
             payload['tools'] = tools
         try:
             response = await self._client.post(url, json=payload, headers=headers, extensions=extensions)
+        except httpx.ReadTimeout:
+            raise IntegrationError('模型响应超时：等待生成结果超过300秒，可稍后继续任务或选择响应更快的模型。', kind='network') from None
+        except httpx.ConnectTimeout:
+            raise IntegrationError('连接模型服务超时，请检查模型接口地址与服务器网络。', kind='network') from None
         except (httpx.TimeoutException, httpx.NetworkError, httpx.ProxyError):
-            raise IntegrationError('Model connection failed.', kind='network') from None
+            raise IntegrationError('模型请求传输失败，请检查服务器网络后继续任务。', kind='network') from None
         if response.status_code >= 300:
             raise IntegrationError('Model request failed.', kind='auth' if response.status_code in (401, 403) else 'remote')
         try:

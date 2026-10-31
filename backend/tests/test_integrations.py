@@ -599,3 +599,19 @@ async def test_subscription_invalid_encoding_is_validation_error():
         await download_subscription('https://feed.example/sub', transport=httpx.MockTransport(lambda _: httpx.Response(200, content=b'\xff')))
     assert caught.value.kind == 'validation'
     assert 'UTF-8' in str(caught.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('error,expected', [
+    (httpx.ReadTimeout, '模型响应超时'),
+    (httpx.ConnectTimeout, '连接模型服务超时'),
+])
+async def test_model_timeout_identifies_failure_stage(error, expected):
+    def handler(request):
+        raise error('sensitive upstream text', request=request)
+    async with ModelClient('https://model.example/v1','key','m',transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(IntegrationError) as caught:
+            await client.complete([{'role':'user','content':'test'}])
+    assert caught.value.kind == 'network'
+    assert expected in str(caught.value)
+    assert 'sensitive' not in str(caught.value)
