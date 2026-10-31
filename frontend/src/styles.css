@@ -44,3 +44,54 @@
 .workspace-projects small { font-size: 11px; font-weight: 400; color: var(--text-muted, #71877f); }
 .main-nav { overflow-y: auto; min-height: 0; }
 .project-import input { border: 1px solid #dce6e0; border-radius: 10px; padding: 12px; }
+
+.overview-dashboard { display: grid; gap: 22px; }
+.overview-description { display: flex; gap: 10px; align-items: flex-start; color: #537067; line-height: 1.7; }
+.overview-description svg { flex-shrink: 0; margin-top: 4px; }
+.overview-stats { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }
+.overview-stats button { display: flex; align-items: center; gap: 14px; text-align: left; padding: 20px; background: #f5f9f7; border: 1px solid #e0eae4; border-radius: 12px; color: #397366; cursor: pointer; }
+.overview-stats button:hover { border-color: #82b8a7; background: #edf6f1; }
+.overview-stats button span { display: grid; gap: 5px; flex: 1; }
+.overview-stats strong { font-size: 28px; color: #233d34; }
+.overview-stats small { font-size: 12px; }
+.overview-caption { font-size: 12px; line-height: 1.6; color: #72867c; margin: -10px 0 0; }
+.overview-section-title { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 12px; }
+.overview-section-title h3 { font-size: 22px; margin: 6px 0; }
+.overview-section-title p,.section-intro p { color: #77877f; font-size: 13px; line-height: 1.7; margin: 6px 0 18px; }
+.report-index { display: flex; flex-wrap: wrap; gap: 8px; }
+.report-index a { padding: 8px 12px; border: 1px solid #e1e9e5; border-radius: 8px; color: #537166; text-decoration: none; font-size: 12px; }
+.report-index a span { margin-right: 8px; color: #8c9c94; }
+.report-card-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; align-items: start; }
+.report-card { min-width: 0; border: 1px solid #e1e9e5; border-radius: 12px; padding: 22px; scroll-margin-top: 24px; }
+.report-card-heading { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #edf1ee; padding-bottom: 16px; margin-bottom: 16px; }
+.report-card-heading > span { display: grid; place-items: center; width: 32px; height: 32px; background: #eaf5ee; color: #34836b; border-radius: 8px; font-size: 12px; flex-shrink: 0; }
+.report-card-heading h3 { font-size: 17px; margin: 0; overflow-wrap: anywhere; }
+.report-card .markdown { font-size: 13px; line-height: 1.85; overflow-wrap: anywhere; }
+.report-card .markdown ul { padding-left: 19px; }
+.report-card .markdown li { margin: 10px 0; }
+.analysis-basis,.directory-details { border: 1px solid #e3eae5; border-radius: 10px; padding: 16px 20px; }
+.analysis-basis summary,.directory-details summary { cursor: pointer; font-size: 14px; color: #4f675c; }
+.analysis-basis summary span { font-size: 12px; color: #8a9b91; margin-left: 10px; }
+.analysis-basis-body { font-size: 13px; color: #647b6e; line-height: 1.8; margin-top: 18px; }
+.analysis-basis-body a { color: #278369; }
+.section-intro h3 { margin: 0; font-size: 21px; }
+.count-badge { display: inline-block; margin-left: 6px; padding: 3px 8px; background: #eef4f0; border-radius: 6px; font-size: 12px; font-weight: 500; color: #608071; }
+.directory-details .snapshot-items { margin-top: 16px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.snapshot-items summary { margin-top: 12px; font-size: 12px; color: #58816d; cursor: pointer; }
+.snapshot-toolbar { display: flex; gap: 12px; margin: 20px 0; }
+.snapshot-toolbar input { flex: 1; min-width: 0; }
+.snapshot-toolbar input,.snapshot-toolbar select { border: 1px solid #dce7df; border-radius: 9px; background: white; padding: 11px 12px; color: #445e50; font: inherit; font-size: 13px; }
+.snapshot-collection .snapshot-items { margin-top: 18px; }
+@media(max-width:1100px) { .report-card-grid { grid-template-columns: 1fr; } }
+@media(max-width:600px) {
+ .overview-stats { gap: 6px; }
+ .overview-stats button { padding: 12px 8px; gap: 5px; }
+ .overview-stats button > svg { display: none; }
+ .overview-stats strong { font-size: 24px; }
+ .overview-stats small { font-size: 10px; }
+ .overview-section-title { align-items: flex-start; flex-direction: column; }
+ .report-card { padding: 16px; }
+ .snapshot-toolbar { flex-direction: column; }
+ .directory-details .snapshot-items { grid-template-columns: 1fr; }
+ .analysis-basis summary span { display: block; margin: 8px 0 0; }
+}
