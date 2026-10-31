@@ -615,3 +615,22 @@ async def test_model_timeout_identifies_failure_stage(error, expected):
     assert caught.value.kind == 'network'
     assert expected in str(caught.value)
     assert 'sensitive' not in str(caught.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('query,qualifier', [
+    ('展示优化', 'is:issue'), ('is:issue UI', 'is:issue'),
+    ('is:pr UI', 'is:pull-request'), ('is:pull-request UI', 'is:pull-request'),
+])
+async def test_search_includes_explicit_record_type(query, qualifier):
+    def handler(request):
+        if request.url.path == '/repos/a/b':
+            return httpx.Response(200,json={'private':False})
+        q=request.url.params['q']
+        assert q.startswith('repo:a/b ')
+        assert qualifier in q.split()
+        assert 'is:pr' not in q.split()
+        assert q.split().count(qualifier)==1
+        return httpx.Response(200,json={'items':[],'total_count':0})
+    async with GitHubClient(transport=httpx.MockTransport(handler)) as client:
+        await client.tool('a/b','search_issues',{'query':query})
