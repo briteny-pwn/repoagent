@@ -1,0 +1,6 @@
+[Unit]
+Description=Renew Repository Steward certificates
+[Service]
+Type=oneshot
+ExecStart=/opt/repository-steward/.venv/bin/certbot renew --cert-name repository-steward-ip --quiet --deploy-hook "systemctl reload nginx"
+ExecStart=/opt/repository-steward/.venv/bin/certbot renew --cert-name repository-steward-domain --quiet --deploy-hook "systemctl reload nginx"

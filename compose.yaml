@@ -1,0 +1,75 @@
+name: repository-steward
+x-app: &app
+  build: .
+  env_file: ${APP_ENV_FILE:-.env}
+  restart: unless-stopped
+  volumes:
+    - ./data:/data
+  security_opt:
+    - no-new-privileges:true
+services:
+  api:
+    <<: *app
+    environment:
+      DATA_DIR: /data
+      FORWARDED_ALLOW_IPS: 172.30.84.2
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+  worker:
+    <<: *app
+    command: [python, -m, app.worker]
+    network_mode: service:api
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      DATA_DIR: /data
+    healthcheck:
+      test: [CMD, python, -c, "from app.store import Store; from app.config import Config; raise SystemExit(0 if Store(Config()).worker_alive() else 1)"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?Set SITE_ADDRESS in .env}
+    networks:
+      default:
+        ipv4_address: 172.30.84.2
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+  mihomo:
+    image: ${MIHOMO_IMAGE:-metacubex/mihomo:latest}
+    profiles: [proxy]
+    restart: unless-stopped
+    network_mode: service:api
+    user: '10001:10001'
+    command: [-d, /data/proxy, -f, /data/proxy/config.yaml]
+    volumes:
+      - ./data/proxy:/data/proxy
+    depends_on:
+      api:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.84.0/24

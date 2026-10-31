@@ -1,0 +1,24 @@
+[Unit]
+Description=Repository Steward API
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+User=steward
+Group=steward
+WorkingDirectory=/opt/repository-steward
+EnvironmentFile=/opt/repository-steward/.env
+Environment=PYTHONPATH=/opt/repository-steward/backend
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/repository-steward/.venv/bin/uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8017 --proxy-headers --forwarded-allow-ips 127.0.0.1 --no-access-log
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/repository-steward/data
+UMask=0077
+MemoryMax=256M
+[Install]
+WantedBy=multi-user.target
