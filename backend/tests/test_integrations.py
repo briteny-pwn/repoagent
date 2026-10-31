@@ -325,7 +325,7 @@ async def test_model_request_uses_pinned_ip_after_dns_check(monkeypatch):
 
 def test_subscription_rejects_unsupported_or_unsafe_nodes():
     with pytest.raises(IntegrationError):
-        parse_subscription('proxies:\n  - {name: bad, type: socks5, server: example.com, port: 1080}')
+        parse_subscription('proxies:\n  - {name: bad, type: unsupported-protocol, server: example.com, port: 1080}')
     with pytest.raises(IntegrationError):
         parse_subscription('proxies:\n  - {name: bad, type: trojan, server: 127.0.0.1, port: 443, password: x}')
     with pytest.raises(IntegrationError):
@@ -510,6 +510,52 @@ async def test_rollback_detects_stale_running_proxy_state(tmp_path):
         await activate_mihomo(nodes,'a','http://mihomo:9090','secret',path,'http://mihomo:7890',
                               transport=httpx.MockTransport(controller),probe_transport=httpx.MockTransport(lambda _:httpx.Response(503)))
     assert error.value.kind=='rollback'
+
+
+def test_socks5_yaml_without_auth_round_trips_to_mihomo():
+    import yaml
+    nodes=parse_subscription('proxies:\n  - name: socks\n    type: socks5\n    server: proxy.example.com\n    port: 1080\n    udp: true\n')
+    config=yaml.safe_load(render_mihomo_config(nodes,'socks','controller-test'))
+    assert config['proxies'][0]==nodes[0]
+    assert nodes[0]['type']=='socks5'
+    assert 'password' not in nodes[0]
+
+
+def test_socks5_optional_auth_preserved_and_unknown_fields_removed():
+    import yaml
+    node={'name':'socks','type':'socks5','server':'proxy.example.com','port':1080,'username':'user','password':'pass','dialer-proxy':'unsafe','udp':False}
+    parsed=parse_subscription(yaml.safe_dump({'proxies':[node]}))[0]
+    assert parsed['username']=='user' and parsed['password']=='pass'
+    assert 'dialer-proxy' not in parsed
+
+
+@pytest.mark.parametrize('extra', [
+    {'username':'user'}, {'password':'pass'}, {'username':12,'password':'pass'},
+    {'username':'user','password':''}, {'username':'x'*256,'password':'pass'},
+    {'udp':'yes'}, {'tls':True}, {'tls':'false'},
+])
+def test_socks5_rejects_invalid_or_unsupported_options(extra):
+    import yaml
+    node={'name':'socks','type':'socks5','server':'proxy.example.com','port':1080,**extra}
+    with pytest.raises(IntegrationError) as error:
+        parse_subscription(yaml.safe_dump({'proxies':[node]}))
+    assert error.value.kind=='validation'
+
+
+@pytest.mark.asyncio
+async def test_socks5_node_server_is_pinned_to_public_ip(monkeypatch):
+    async def lookup(*args, **kwargs): return [(2,1,6,'',('1.1.1.1',1080))]
+    monkeypatch.setattr(asyncio.get_running_loop(),'getaddrinfo',lookup)
+    node={'name':'socks','type':'socks5','server':'proxy.example.com','port':1080}
+    assert (await pin_subscription_nodes([node]))[0]['server']=='1.1.1.1'
+
+
+@pytest.mark.parametrize('server', ['127.0.0.1', '::1', 'localhost', '10.0.0.1'])
+def test_socks5_rejects_non_public_node_with_clear_error(server):
+    import yaml
+    with pytest.raises(IntegrationError, match='公网代理节点'):
+        parse_subscription(yaml.safe_dump({'proxies':[{'name':'socks','type':'socks5','server':server,'port':1080}]}))
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('failure, expected', [
