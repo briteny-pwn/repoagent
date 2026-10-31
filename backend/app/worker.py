@@ -63,6 +63,11 @@ class Worker:
                     s.put('drafts',d['id'],d,c)
                     return 'reconcile',d
             for task in reversed(s.all('tasks',c)):
+                if task['kind']=='subscription':
+                    if task.get('status') not in ('completed','failed','cancelled'):
+                        task.update(status='cancelled',error='订阅刷新已改为设置操作，请在设置页重新刷新',updated_at=now())
+                        s.put('tasks',task['id'],task,c)
+                    continue
                 state=task.get('status')
                 eligible=state=='queued' or (state=='running' and task.get('lease',0)<time.time()) or (state=='waiting_rate_limit' and task.get('retry_at',0)<=time.time())
                 if eligible:
@@ -158,7 +163,7 @@ class Worker:
                     await github.diagnose(task['repository'])
                 check()
                 self.update_task(task['id'],status='completed',result={'report':'GitHub 连接测试成功。发布权限需要实际发布时再次校验。','evidence':[],'limitations':[]})
-            elif task['kind'] in ('subscription','node'):
+            elif task['kind']=='node':
                 await self.subscription(task,proxy,check,event)
             else:
                 raise IntegrationError('不支持的任务类型',kind='validation')
@@ -173,14 +178,11 @@ class Worker:
             event('error','任务执行失败（已隐藏远端敏感信息）')
 
     async def subscription(self,task,proxy,check,event):
-        from .subscriptions import download_subscription, activate_mihomo
+        from .subscriptions import activate_mihomo
         cfg=task['settings'];s=self.store
         if (s.get('runtime','proxy_cleanup') or {}).get('pending'):
             raise IntegrationError('旧订阅代理仍待清理，请修复客户端后恢复任务',kind='network')
         nodes=cfg['subscription']['nodes']
-        if task['kind']=='subscription':
-            event('subscription','下载并校验订阅配置')
-            nodes=await download_subscription(cfg['subscription']['url'],proxy_url=proxy)
         check()
         selected=task.get('payload',{}).get('name') or cfg['subscription']['selected_node']
         if selected not in [n['name'] for n in nodes]: selected=nodes[0]['name']
@@ -192,7 +194,7 @@ class Worker:
                 latest=s.get('tasks',task['id'],c)
                 if latest.get('status')=='cancelled':
                     raise StopTask()
-                if current['subscription']['url']!=cfg['subscription']['url'] or current['generations']['subscription']!=cfg['generations']['subscription']:
+                if (current['subscription']['url']!=cfg['subscription']['url'] or current['generations']['subscription']!=cfg['generations']['subscription'] or current['subscription']['nodes']!=cfg['subscription']['nodes']):
                     raise IntegrationError('订阅配置已改变，请重新更新',kind='validation')
                 current['subscription'].update(nodes=nodes,selected_node=selected,updated_at=now(),status='已启用')
                 current['network'].update(mode='proxy',proxy_url=self.config.sidecar_proxy_url)

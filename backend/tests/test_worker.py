@@ -179,3 +179,13 @@ async def test_proxy_cleanup_wait_does_not_block_direct_analysis(tmp_path):
     t=s.enqueue('analysis','x')
     await Worker(cfg,store=s,github_factory=FakeGitHub,model_factory=FakeModel).tick()
     assert s.get('tasks',t['id'])['status']=='waiting_confirmation'
+
+
+def test_worker_cancels_legacy_subscription_jobs_without_executing(tmp_path):
+    from app.worker import Worker
+    cfg=Config(data_dir=str(tmp_path),encryption_key=Fernet.generate_key().decode(),admin_password='test-password-long')
+    store=Store(cfg)
+    legacy=store.enqueue('subscription')
+    worker=Worker(cfg,store)
+    assert worker.claim() is None
+    assert store.get('tasks',legacy['id'])['status']=='cancelled'

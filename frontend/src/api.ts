@@ -68,7 +68,7 @@ export class ApiClient {
   updateNetwork(values: { mode: 'direct' | 'proxy' | 'auto'; proxy_url?: string }) { return this.request<Settings>('/settings/network', 'PUT', values); }
   testNetwork() { return this.request<{ id: string; status: 'queued' }>('/settings/network/test', 'POST'); }
   updateSubscription(url: string) { return this.request<Settings>('/settings/subscription', 'PUT', { url }); }
-  refreshSubscription() { return this.request<{ id: string; status: 'queued' }>('/settings/subscription/refresh', 'POST'); }
+  refreshSubscription() { return this.request<Settings>('/settings/subscription/refresh', 'POST'); }
   selectNode(name: string) { return this.request<{ id: string; status: 'queued' }>('/settings/subscription/node', 'PUT', { name }); }
   deleteCredential(kind: 'model' | 'github' | 'proxy' | 'subscription') { return this.request<Settings>(`/settings/credentials/${kind}`, 'DELETE'); }
   tasks() { return this.request<Task[]>('/tasks'); }
