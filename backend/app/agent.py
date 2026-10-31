@@ -112,10 +112,20 @@ async def run_agent(task, github, model, check, save, event):
                     raise ValueError()
             except (ValueError,TypeError):
                 raise IntegrationError('模型工具参数无效',kind='validation') from None
-            event('tool', f'读取 GitHub：{name}')
-            output = await github.tool(repo,name,args)
+            event('tool', f'读取 GitHub：{name}' + (f'（{str(args.get("path",""))[:200]}）' if name == 'read_file' else ''))
+            try:
+                output = await github.tool(repo,name,args)
+            except IntegrationError as exc:
+                if name != 'read_file' or exc.kind not in ('unsupported', 'not_found'):
+                    raise
+                # A missing path must not hide a repository that became private or inaccessible.
+                await github.repository(repo)
+                check()
+                output = {'error':{'kind':exc.kind,'message':'该路径无法作为文本文件读取，请选择其他文件或依据已读取资料继续；报告中说明缺失内容。'}}
+                event('tool_warning','该文件未读取，已通知模型选择其他资料继续分析')
+            else:
+                used.add(name)
             check()
-            used.add(name)
             allowed.update(source_links(output,repo))
             serialized = json.dumps(output,ensure_ascii=False)
             if len(serialized)>24000:

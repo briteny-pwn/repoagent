@@ -209,6 +209,12 @@ class GitHubClient:
             if not isinstance(path, str) or not path or path.startswith('/') or '..' in path.split('/'):
                 raise IntegrationError('Invalid file path.', kind='validation')
             data = await self._request('GET', f'{base}/contents/{quote(path, safe="/")}', params={'ref': args['ref']} if args.get('ref') else None)
+            if isinstance(data, list):
+                fields = ('name', 'path', 'type', 'html_url', 'size', 'sha')
+                return {'type':'directory', 'path':path,
+                        'items':[{key:item.get(key) for key in fields} for item in data[:200] if isinstance(item,dict)],
+                        'coverage':{'returned':min(len(data),200),'truncated':len(data)>200},
+                        'note':'这是目录列表，请选择具体文件路径读取内容。'}
             if not isinstance(data, dict) or data.get('type') != 'file' or data.get('encoding') != 'base64' or not isinstance(data.get('content'), str):
                 raise IntegrationError('Unsupported repository file.', kind='unsupported')
             encoded = ''.join(data['content'].split())

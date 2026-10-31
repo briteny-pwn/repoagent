@@ -634,3 +634,16 @@ async def test_search_includes_explicit_record_type(query, qualifier):
         return httpx.Response(200,json={'items':[],'total_count':0})
     async with GitHubClient(transport=httpx.MockTransport(handler)) as client:
         await client.tool('a/b','search_issues',{'query':query})
+
+
+@pytest.mark.asyncio
+async def test_read_file_directory_returns_bounded_listing():
+    def handler(request):
+        if request.url.path == '/repos/a/b':
+            return httpx.Response(200,json={'private':False})
+        return httpx.Response(200,json=[{'type':'file','path':'frontend/package.json','name':'package.json','html_url':'https://github.com/a/b/blob/main/frontend/package.json','download_url':'discard'}])
+    async with GitHubClient(transport=httpx.MockTransport(handler)) as client:
+        result=await client.tool('a/b','read_file',{'path':'frontend'})
+    assert result['type']=='directory'
+    assert result['items'][0]['path']=='frontend/package.json'
+    assert 'download_url' not in result['items'][0]
