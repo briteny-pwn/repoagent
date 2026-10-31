@@ -40,7 +40,7 @@ Task status queued/running/waiting_confirmation/waiting_network/waiting_rate_lim
 - GET `/projects/{id}/tasks` -> Task[] scoped to project.
 - POST `/projects/{id}/tasks` {prompt,request_id} -> {id,status}; requires ready project, freezes repository and bounded context. Request IDs are scoped per project.
 
-Project = {id,repository,name,status:pending|initializing|ready|failed,initialization_task_id,initialized_at,created_at,updated_at,last_error}.
+Project = {id,repository,name,status:pending|initializing|ready|failed|waiting_rate_limit|waiting_network,retry_at:epoch|null,initialization_task_id,initialized_at,created_at,updated_at,last_error}.
 ProjectDetail adds {summary:Report|null,snapshot:Snapshot|null}. Snapshot contains metadata, root directory, readme, files, issues:{items,coverage}, pull_requests:{items,coverage}, captured_at, limitations. File content uses `text`. Task adds nullable `project_id`.
 
 Snapshots are encrypted at rest and returned only to authenticated users; internal task snapshots and credentials are never returned. Initialization creates no publication drafts. Failed refresh retains previous snapshot; commands require successful initialization. Historical analysis tasks migrate into projects by repository without external requests. Legacy POST /tasks is retained for compatibility; the UI uses project endpoints.

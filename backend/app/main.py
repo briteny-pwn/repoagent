@@ -52,6 +52,10 @@ def public_settings(store):
 
 def public_project(store, project, detail=False):
     value = {k:v for k,v in project.items() if k != 'context'}
+    task = store.get('tasks', project.get('initialization_task_id'))
+    value['retry_at'] = None
+    if task and task['status'] in ('waiting_rate_limit', 'waiting_network'):
+        value.update(status=task['status'], last_error=task.get('error'), retry_at=task.get('retry_at'))
     if detail:
         saved = store.unseal(project['context']) if project.get('context') else {}
         value.update(summary=saved.get('summary'), snapshot=saved.get('snapshot'))

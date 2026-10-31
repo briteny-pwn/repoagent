@@ -141,7 +141,8 @@ class GitHubClient:
                 raise IntegrationError('GitHub connection failed.', kind='network', ambiguous=method != 'GET') from None
             rate = _rate_limit(response)
             if rate:
-                raise rate
+                hint = '请等待配额恢复。' if self._token else '当前未配置 GitHub 访问令牌，匿名配额由出口 IP 共享；可在设置中配置令牌后重新初始化。'
+                raise IntegrationError('GitHub API 请求已达限额。'+hint, kind='rate_limit', retry_at=rate.retry_at)
             if method == 'GET' and response.status_code in (500, 502, 503, 504) and attempt + 1 < attempts:
                 await asyncio.sleep(min(2 ** attempt + random.random(), 3))
                 continue

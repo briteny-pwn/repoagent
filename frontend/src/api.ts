@@ -7,7 +7,7 @@ export interface Task { project_id: string | null; id: string; kind: TaskKind; p
 export interface TaskDetail extends Task { result: { report: string; evidence: { title: string; url: string }[]; limitations: string[] } | null; events: Event[]; drafts: Draft[] }
 export interface Report { report: string; evidence: { title: string; url: string }[]; limitations: string[] }
 export interface Snapshot { metadata: Record<string, unknown>; readme: Record<string, unknown> | null; files: Record<string, unknown>[]; directory: Record<string, unknown>[]; issues: { items: Record<string, unknown>[]; coverage: Record<string, unknown> }; pull_requests: { items: Record<string, unknown>[]; coverage: Record<string, unknown> }; captured_at: string; limitations: string[] }
-export interface Project { id: string; repository: string; name: string; status: 'pending' | 'initializing' | 'ready' | 'failed'; initialization_task_id: string | null; initialized_at: string | null; created_at: string; updated_at: string; last_error: string | null }
+export interface Project { id: string; repository: string; name: string; status: 'pending' | 'initializing' | 'ready' | 'failed' | 'waiting_rate_limit' | 'waiting_network'; retry_at?: number | null; initialization_task_id: string | null; initialized_at: string | null; created_at: string; updated_at: string; last_error: string | null }
 export interface ProjectDetail extends Project { summary: Report | null; snapshot: Snapshot | null }
 export interface Settings {
   model: { base_url: string; model: string; api_key_configured: boolean; max_steps: number };

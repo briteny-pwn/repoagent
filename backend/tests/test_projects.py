@@ -144,3 +144,13 @@ def test_stale_cancel_cannot_invalidate_completed_initialization(tmp_path):
     assert c.post('/api/tasks/'+task['id']+'/cancel').status_code==200
     assert s.get('projects',p['id'])['status']=='ready'
     assert s.get('tasks',task['id'])['status']=='completed'
+
+
+def test_project_exposes_waiting_state_and_retry_time(tmp_path):
+    c,app=make_client(tmp_path);login(c);configure(app);s=app.state.store
+    p,_=s.create_project('a/repo');t=s.initialize_project(p['id'])
+    t.update(status='waiting_rate_limit',retry_at=2000000000,error='limited')
+    s.put('tasks',t['id'],t)
+    detail=c.get('/api/projects/'+p['id']).json()
+    assert detail['status']=='waiting_rate_limit'
+    assert detail['retry_at']==2000000000

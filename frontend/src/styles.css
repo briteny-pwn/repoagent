@@ -34,3 +34,13 @@
 @media (max-width: 1000px) { .project-layout { grid-template-columns: 1fr; } .project-navigation { display: flex; flex-wrap: wrap; gap: 5px; } .project-navigation h2 { width: 100%; } .project-navigation > button { width: auto; } }
 @media (max-width: 600px) { .project-import > div, .project-header { flex-direction: column; align-items: stretch; } .project-content { padding: 16px; } .project-tabs button { padding: 9px; } }
 .snapshot-source { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; max-height: 420px; overflow: auto; }
+
+/* Project navigation belongs to the persistent workspace sidebar. */
+#workspace-project-navigation { display: grid; gap: 8px; min-width: 0; }
+.workspace-projects { display: grid; gap: 5px; min-width: 0; }
+.workspace-projects button { min-width: 0; align-items: flex-start; }
+.workspace-projects button > span { min-width: 0; display: grid; gap: 5px; text-align: left; }
+.workspace-projects strong { font-size: 13px; overflow-wrap: anywhere; }
+.workspace-projects small { font-size: 11px; font-weight: 400; color: var(--text-muted, #71877f); }
+.main-nav { overflow-y: auto; min-height: 0; }
+.project-import input { border: 1px solid #dce6e0; border-radius: 10px; padding: 12px; }
