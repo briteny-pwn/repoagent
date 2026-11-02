@@ -193,3 +193,24 @@ async def test_disabled_issues_skips_endpoint_with_unavailable_coverage():
     assert result['issues']['coverage']['reason'] == 'issues_disabled'
     assert any('未启用 Issue' in text for text in result['limitations'])
     assert result['pull_requests']['items']
+
+@pytest.mark.asyncio
+async def test_pr_lifecycle_preserves_merge_null_and_closure_actor():
+    class LifecycleGitHub(FakeGitHub):
+        async def tool(self, repo, name, args):
+            if name == 'get_issue':
+                return {'state': 'closed', 'closed_at': '2026-11-02', 'closed_by': {'login': 'author', 'secret': 'omit'}}
+            return {'items': [
+                {'number': 1, 'state': 'closed', 'merged_at': '2026-11-01', 'closed_at': '2026-11-01'},
+                {'number': 2, 'state': 'closed', 'merged_at': None, 'closed_at': '2026-11-02', 'user': {'login': 'author'}},
+                {'number': 3, 'state': 'open', 'draft': True},
+                {'number': 4, 'state': 'closed'},
+            ], 'coverage': {}}
+    result = await collect_project_snapshot(LifecycleGitHub(), 'a/b', lambda: None, lambda *args: None)
+    merged, closed, draft, legacy = result['pull_requests']['items']
+    assert merged['merged_at'] == '2026-11-01'
+    assert closed['merged_at'] is None
+    assert closed['closed_by'] == closed['author'] == 'author'
+    assert 'secret' not in str(closed)
+    assert draft['draft'] is True
+    assert 'merged_at' not in legacy

@@ -102,13 +102,39 @@ async def collect_project_snapshot(github, repo: str, check, event) -> dict:
                     and (name != 'issues' or 'pull_request' not in item)]
         items = []
         text_truncated = False
+        closure_reads = 0
         for item in eligible:
             record = {key: item.get(key) for key in ('number', 'html_url', 'state', 'updated_at')}
             for key, limit in (('title', 500), ('body', 4000)):
                 value = item.get(key) or ''
                 text_truncated |= len(value) > limit
                 record[key] = value[:limit]
+            if name == 'pull_requests':
+                # Preserve absent versus explicit null for legacy/partial responses.
+                for key in ('merged_at', 'closed_at', 'draft'):
+                    if key in item:
+                        record[key] = item[key]
+                author = item.get('user')
+                if isinstance(author, dict):
+                    record['author'] = author.get('login')
+                if item.get('state') == 'closed' and 'merged_at' in item and item['merged_at'] is None:
+                    record['closure_actor_status'] = 'not_collected'
+                    if closure_reads < 20:
+                        closure_reads += 1
+                        try:
+                            detail = await io(github.tool, repo, 'get_issue', {'number': item['number']})
+                            actor = detail.get('closed_by')
+                            # State may change between list and detail requests.
+                            if detail.get('state') == 'closed' and detail.get('closed_at') == item.get('closed_at') and isinstance(actor, dict):
+                                record['closed_by'] = actor.get('login')
+                                record['closure_actor_status'] = 'collected'
+                        except IntegrationError as exc:
+                            if exc.kind not in ('not_found', 'remote'):
+                                raise
+                            record['closure_actor_status'] = 'unavailable'
             items.append(record)
+        if name == 'pull_requests' and any(row.get('closure_actor_status') == 'not_collected' for row in items):
+            limitations.append('部分未合并 PR 的关闭操作者未采集；每次最多补充 20 条关闭记录。')
         coverage = {**data.get('coverage', {}), 'returned': len(items), 'fetched': len(bounded),
                     'item_limit': 100, 'text_truncated': text_truncated,
                     'truncated': bool(data.get('coverage', {}).get('truncated')) or len(source) > 100}

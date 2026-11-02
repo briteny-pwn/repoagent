@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from 'react';
+import { prStatus } from './prStatus';
 import ProjectOverview from './ProjectOverview';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, GitBranch, LoaderCircle, Plus, RefreshCw, Send } from 'lucide-react';
@@ -15,7 +16,7 @@ function Link({ url, children }: { url: unknown; children: ReactNode }) {
   return safe ? <a href={safe} target="_blank" rel="noreferrer">{children} ↗</a> : <span>{children}</span>;
 }
 function SnapshotItems({ items, empty, Markdown }: { items: Record<string, unknown>[]; empty: string; Markdown: ComponentType<{ text: string }> }) {
-  return items.length ? <div className="snapshot-items">{items.map((item, i) => <article key={text(item.number) || text(item.path) || i}><strong><Link url={item.html_url ?? item.url}>{item.number ? `#${text(item.number)} ` : ''}{text(item.title) || text(item.path) || text(item.name) || '未命名记录'}</Link></strong>{!!item.state && <span className="muted small"> · {text(item.state)}</span>}{typeof item.text === 'string' && <details><summary>查看保存的内容</summary><pre className="snapshot-source">{item.text}</pre></details>}{typeof item.body === 'string' && <details><summary>查看正文</summary><div className="snapshot-markdown"><Markdown text={item.body}/></div></details>}</article>)}</div> : <div className="empty-inline">{empty}</div>;
+  return items.length ? <div className="snapshot-items">{items.map((item, i) => <article key={text(item.number) || text(item.path) || i}><strong><Link url={item.html_url ?? item.url}>{item.number ? `#${text(item.number)} ` : ''}{text(item.title) || text(item.path) || text(item.name) || '未命名记录'}</Link></strong>{!!item.state && <span className="muted small"> · {typeof item.html_url==='string' && /\/pull\/\d+/.test(item.html_url) ? prStatus(item).label : text(item.state)}</span>}{typeof item.text === 'string' && <details><summary>查看保存的内容</summary><pre className="snapshot-source">{item.text}</pre></details>}{typeof item.body === 'string' && <details><summary>查看正文</summary><div className="snapshot-markdown"><Markdown text={item.body}/></div></details>}</article>)}</div> : <div className="empty-inline">{empty}</div>;
 }
 
 export default function ProjectWorkspace({ api, run, checkConfig, TaskPanel, Markdown, onSelect, active }: { onSelect: () => void; active: boolean; api: ApiClient; run: Run; checkConfig: () => Promise<boolean>; TaskPanel: ComponentType<TaskPanelProps>; Markdown: ComponentType<{ text: string }> }) {
