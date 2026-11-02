@@ -62,3 +62,10 @@ Snapshots are encrypted at rest and returned only to authenticated users; intern
 Tests import `from app...` using PYTHONPATH=backend. Shared .venv is being installed by root. Do not modify other owners' files.
 
 Legacy subscription refresh task records are retained internally but excluded from task APIs and cancelled by the worker if unfinished. Refreshing nodes does not change the active proxy; node activation remains a separate action.
+
+
+## Model-callable draft tools
+
+`prepare_issue` requires `title` (1–256 characters), `body` (1–12000), and `duplicate_query` (1–180 keyword characters, no colon qualifiers). It runs repository-scoped Issue search before returning one draft. `prepare_comment` requires a positive integer `issue_number` and `body` (1–12000); it validates the target as an open Issue. Neither accepts repository, credentials, or publish flags.
+
+These tools are dispatched locally by the agent, not through GitHubClient.tool. Invalid preparation arguments become tool error messages for model correction within the existing budget. Other integration failures retain the normal retry/failure handling. The first successful preparation is terminal: later calls in the same batch are not executed. The Worker atomically persists the returned report and draft, then sets waiting_confirmation. No new public HTTP publication endpoint is introduced.
